@@ -1,44 +1,54 @@
 const db = require('../database/models/');
 const dotenv = require('dotenv');
 const aws = require('aws-sdk');
+const v4 = require('uuid').v4;
+var multer = require('multer');
+var multerS3 = require('multer-s3');
 dotenv.config();
 
 const { File } = db;
 
+const bucketName = '';
+
 const s3 = new aws.S3({
-    accessKeyId: process.env.AWS_ACCESS_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  accessKeyId: process.env.AWS_ACCESS_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  signatureVersion: 'v4',
 });
 
-class uploadController {
+// Upload file to S3
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: bucketName,
+    metadata: function (req, file, cb) {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: function (req, file, cb) {
+      cb(null, `file_${v4()}`);
+    },
+  }),
+});
 
-    //method to upload file and insert in the DB
-    static async uploadMyFile(req, res) {
+const send2db = (filename, link) => {
+  const file = File.build({
+    fileName: filename,
+    fileLink: link,
+  });
 
-        if (!req.file)
-            return res.send('Please upload a file')
+  console.log(file);
 
-        try {
+  file.save()
+};
 
-            //Upload file to S3
+const getFiles = async(req, res) => {
+  try {
+    const data = await File.findAll();
+    res.status(200).json(data);
+  }catch (err) {
+    console.log(err);
+    res.status(500).end();
+  }
+};
 
-            const newObj = await File.create({ fileName: req.file.originalname, fileLink: req.file.location });
-            //Insert file name and link in DB
-
-            // Return error of success msg
-
-        } catch (error) {
-            console.log('ERROR', error);
-            return res.status('500').json({ errors: { error: 'Files not found', err: error.message } });
-        }
-    }
-
-    //method to return files in the DB
-    static async getFiles(req, res) {
-
-        //Code to get all files from DB and return them
-
-    }
-}
-
-module.exports = uploadController;
+module.exports = { upload, send2db, getFiles };
